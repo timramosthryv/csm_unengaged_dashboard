@@ -181,7 +181,7 @@
     </div>
     <div class="grid-2">
       <div class="card"><div class="card-title">Stale Accounts</div><div class="card-subtitle">No last activity date, or last activity 60+ days ago</div><div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#1e40af;line-height:1.5;">Note: This list is based on system-tracked dates only. CSMs may have notated the account or performed outreach within this period that is not reflected in these fields. Verify by checking the Notes section on the CER form before taking action.</div><div class="stale-list" id="staleList"></div></div>
-      <div class="card"><div class="card-title">Longest Unengaged (Top 15)</div><canvas id="chTopAging"></canvas></div>
+      <div class="card"><div class="card-title">Longest Unengaged (Top 15)</div><div id="topAgingTable"></div></div>
     </div>
   </div>
 
@@ -484,9 +484,9 @@ function renderRisk(){
     return`<div class="stale-item"><div><div class="stale-account">${r.account}</div><div class="stale-owner">${r.owner} · ${r.coach}</div></div><div class="stale-meta"><div class="stale-days" style="color:var(--red)">${ds}</div><span class="badge ${badgeFor(r.riskTier,'risk')}">${r.riskTier}</span></div></div>`;
   }).join('');
 
-  dc('chTopAging');
   const top=filtered.slice().sort((a,b)=>b.formAging-a.formAging).slice(0,15);
-  charts.chTopAging=new Chart(document.getElementById('chTopAging'),{type:'bar',data:{labels:top.map(r=>r.account.length>20?r.account.slice(0,18)+'…':r.account),datasets:[{data:top.map(r=>r.formAging),backgroundColor:top.map(r=>r.riskTier==='High'?'#ef4444':r.riskTier==='Medium'?'#f59e0b':'#10b981'),borderRadius:4}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,title:{display:true,text:'Days'}}}}});
+  const topColors={'High':'#ef4444','Medium':'#f59e0b','Low':'#10b981'};
+  document.getElementById('topAgingTable').innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="background:#f1f5f9;padding:8px 10px;text-align:left;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.3px;font-size:10px;border-bottom:1px solid #e2e8f0;">#</th><th style="background:#f1f5f9;padding:8px 10px;text-align:left;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.3px;font-size:10px;border-bottom:1px solid #e2e8f0;">Account</th><th style="background:#f1f5f9;padding:8px 10px;text-align:left;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.3px;font-size:10px;border-bottom:1px solid #e2e8f0;">CSM</th><th style="background:#f1f5f9;padding:8px 10px;text-align:left;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.3px;font-size:10px;border-bottom:1px solid #e2e8f0;">Coach</th><th style="background:#f1f5f9;padding:8px 10px;text-align:right;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.3px;font-size:10px;border-bottom:1px solid #e2e8f0;">Days</th></tr></thead><tbody>${top.map((r,i)=>`<tr style="background:${i%2===0?'#fff':'#f8fafc'}"><td style="padding:8px 10px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:11px;">${i+1}</td><td style="padding:8px 10px;border-top:1px solid #e2e8f0;font-weight:500;color:var(--text);">${r.account}</td><td style="padding:8px 10px;border-top:1px solid #e2e8f0;color:var(--text);">${r.owner}</td><td style="padding:8px 10px;border-top:1px solid #e2e8f0;color:var(--text);">${r.coach}</td><td style="padding:8px 10px;border-top:1px solid #e2e8f0;text-align:right;"><span style="display:inline-block;background:${topColors[r.riskTier]||'#94a3b8'}22;color:${topColors[r.riskTier]||'#94a3b8'};font-weight:600;padding:2px 8px;border-radius:10px;font-size:11px;">${Math.round(r.formAging)}d</span></td></tr>`).join('')}</tbody></table>`;
 }
 
 function renderCoaches(){
