@@ -125,9 +125,19 @@
 </head>
 <body>
 
-<div class="header">
-  <h1>Unengaged Accounts Dashboard</h1>
-  <p>Customer Success Organization &middot; Thryv &middot; Generated April 24, 2026</p>
+<div class="header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    <h1>Unengaged Accounts Dashboard</h1>
+    <p id="headerMeta">Customer Success Organization &middot; Thryv &middot; Generated April 24, 2026</p>
+  </div>
+  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+    <label for="reportUpload" style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;transition:background .15s;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.12)'">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Upload New Report
+    </label>
+    <input type="file" id="reportUpload" accept=".xls,.xlsx" style="display:none;" onchange="handleReportUpload(this)">
+    <span id="uploadStatus" style="font-size:11px;color:#94a3b8;min-height:16px;"></span>
+  </div>
 </div>
 
 <div class="filters-bar">
@@ -668,6 +678,107 @@ document.querySelectorAll('#detailTable th').forEach(th=>{th.addEventListener('c
 document.getElementById('searchInput').addEventListener('input',()=>{currentPage=1;renderTable();});
 
 initFilters();render();
+
+function handleReportUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('uploadStatus');
+  statusEl.style.color = '#94a3b8';
+  statusEl.textContent = 'Reading file…';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(e.target.result, 'text/html');
+      const table = doc.querySelector('table');
+      if (!table) throw new Error('No table found in file. Make sure this is a Salesforce XLS export.');
+      const rows = Array.from(table.querySelectorAll('tr'));
+      if (rows.length < 2) throw new Error('File appears empty.');
+      // Build header index
+      const headers = Array.from(rows[0].querySelectorAll('th,td')).map(c => c.textContent.trim());
+      const ci = name => headers.indexOf(name);
+      const gv = (cells, name) => { const i = ci(name); return (i >= 0 && i < cells.length) ? cells[i].textContent.trim() : ''; };
+      // Date parser — handles "M/D/YYYY" and "M/D/YYYY H:MM AM/PM"
+      function pd(s) {
+        if (!s) return null;
+        const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})\s*(AM|PM))?/i);
+        if (!m) return null;
+        let h = m[4] ? parseInt(m[4]) : 0;
+        const min = m[5] ? parseInt(m[5]) : 0;
+        const ap = m[6] ? m[6].toUpperCase() : null;
+        if (ap === 'PM' && h < 12) h += 12;
+        if (ap === 'AM' && h === 12) h = 0;
+        return new Date(parseInt(m[3]), parseInt(m[1])-1, parseInt(m[2]), h, min);
+      }
+      function fd(d) { return d ? `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}` : ''; }
+      const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
+      const callCols = ['Set Up Call 1','Set Up Call 2','Set Up Call 3','Strategy Call 1','Strategy Call 2','Strategy Call 3','Strategy Call 4','Strategy Call 5','Activation Call 1','Activation Call 2','Activation Call 3'];
+      const newRecs = [];
+      for (let i = 1; i < rows.length; i++) {
+        const cells = Array.from(rows[i].querySelectorAll('td,th'));
+        if (cells.length < 3) continue;
+        const g = name => gv(cells, name);
+        const dv = name => { const s = g(name); if (!s) return ''; const d = pd(s); return (d && d <= todayEnd) ? fd(d) : ''; };
+        let latestD = null;
+        callCols.forEach(cn => { const s = g(cn); if (s) { const d = pd(s); if (d && d <= todayEnd && (!latestD || d > latestD)) latestD = d; }});
+        newRecs.push({
+          owner: g('Client Engagement Roadmap: Owner Name'),
+          account: g('Account'),
+          formId: g('Client Engagement Roadmap: Onboarding Form ID'),
+          formAging: parseFloat(g('Form Aging (Days)')) || 0,
+          callCadence: '',
+          cerCadence: g('CER Cadence'),
+          status: g('Status'),
+          thryvPackage: g('Thryv Package') || 'Unknown',
+          orderChange: parseInt(g('Thryv Order Change')) || 0,
+          unengagedStatus: g('Unengaged Process Status') || 'Not Started',
+          coach: g('CSM Coach Name'),
+          thryvId: g('Thryv ID'),
+          lastActivity: dv('Client Engagement Roadmap: Last Activity Date'),
+          lastModified: dv('Client Engagement Roadmap: Last Modified Date'),
+          latestCall: latestD ? fd(latestD) : '',
+          claimGMB: dv('Claim/Sync GMB'),
+          setupCall1: g('Set Up Call 1'), setupCall2: g('Set Up Call 2'), setupCall3: g('Set Up Call 3'),
+          strategyCall1: g('Strategy Call 1'), strategyCall2: g('Strategy Call 2'), strategyCall3: g('Strategy Call 3'),
+          actCall1: g('Activation Call 1'), actCall1Detail: g('Activation Call 1 Appointment Details'),
+          actCall2: g('Activation Call 2'), actCall2Detail: g('Activation Call 2 Appointment Details'),
+          actCall3: g('Activation Call 3'), actCall3Detail: g('Activation Call 3 Appointment Details')
+        });
+      }
+      if (newRecs.length === 0) throw new Error('No records could be parsed. Check that the file format matches a Salesforce CER export.');
+      // Replace RAW contents in-place
+      RAW.length = 0;
+      newRecs.forEach(r => RAW.push(r));
+      // Update NOW to today
+      NOW.setTime(new Date().getTime());
+      // Re-compute derived fields
+      RAW.forEach(r => {
+        r.daysSinceModified = r.lastModified ? Math.round((NOW - new Date(r.lastModified)) / 864e5) : 999;
+        r.daysSinceActivity = r.lastActivity ? Math.round((NOW - new Date(r.lastActivity)) / 864e5) : 999;
+        r.daysSinceCall     = r.latestCall   ? Math.round((NOW - new Date(r.latestCall))   / 864e5) : 999;
+        r.daysSinceTouch = Math.min(r.daysSinceModified, r.daysSinceActivity, r.daysSinceCall);
+      });
+      RAW.forEach(r => { r.riskTier = calcRisk(r); });
+      // Rebuild filter dropdowns
+      ['fCoach','fPkg','fStatus','fProc'].forEach(id => { const s = document.getElementById(id); while (s.options.length > 1) s.remove(1); });
+      initFilters();
+      resetFilters();
+      // Update header date
+      const mn = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const nd = new Date();
+      document.getElementById('headerMeta').innerHTML = `Customer Success Organization &middot; Thryv &middot; Generated ${mn[nd.getMonth()]} ${nd.getDate()}, ${nd.getFullYear()}`;
+      statusEl.style.color = '#10b981';
+      statusEl.textContent = `\u2713 ${newRecs.length} accounts loaded`;
+      // Reset file input so same file can be re-uploaded if needed
+      input.value = '';
+    } catch(err) {
+      statusEl.style.color = '#ef4444';
+      statusEl.textContent = 'Error: ' + err.message;
+      input.value = '';
+    }
+  };
+  reader.readAsText(file);
+}
 </script>
 </body>
 </html>
